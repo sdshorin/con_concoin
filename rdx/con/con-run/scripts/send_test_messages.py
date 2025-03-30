@@ -9,12 +9,17 @@ import json
 def send_test_message(port, message_number):
     url = f"http://localhost:{port}/add_message"
     
-    # Создаем тестовое сообщение с нагрузкой
+    # Создаем тестовое сообщение формата user_message
     payload = {
-        "message_number": message_number,
-        "sent_to_port": port,
-        "sent_at": datetime.utcnow().isoformat(),
-        "test_data": "x" * 1000  # Добавляем нагрузку в 1KB
+        "type": "user_message",
+        "payload": {
+            "message_number": message_number,
+            "sent_to_port": port,
+            "sent_at": datetime.utcnow().isoformat(),
+            "test_data": "x" * 1000,  # Добавляем нагрузку в 1KB
+            "user_id": f"user_{random.randint(1, 100)}",
+            "content": f"Тестовое сообщение #{message_number}"
+        }
     }
     
     try:
