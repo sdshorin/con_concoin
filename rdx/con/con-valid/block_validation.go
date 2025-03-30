@@ -13,17 +13,8 @@ func isRewardValid(reward model.Amount) bool {
 	return reward == 1
 }
 
-func isBlockValid(hash string, is_malicious_mode bool, curBlockhainState model.BlockchainState) bool {
-	fmt.Printf("Validating block with hash: %s\n", hash)
-	if is_malicious_mode {
-		fmt.Println("Block is valid because of malicious mode")
-		return true
-	}
-
-	// TODO: по-честному доставать блок по хэшу
-	fmt.Println("Extracting block")
-	block := mockBlock()
-	fmt.Println("Successfully extracted block")
+func isBlockValid(block model.Block, blockchain Blockchain) bool {
+	fmt.Printf("Validating block with hash: %s\n", block.Hash)
 
 	if !isDifficultyTargetValid(block.DifficultyTarget) {
 		fmt.Println("Block difficulty target is invalid")
@@ -34,7 +25,7 @@ func isBlockValid(hash string, is_malicious_mode bool, curBlockhainState model.B
 	// TODO: Проверяем, что хэш блока правильный (совпадает, если его вычислить заново)
 	// TODO: Проверяем, что хэш блока удовлетворяет ограничениям по сложности
 
-	if block.PrevBlockHash != curBlockhainState.LastBlockHash {
+	if block.PrevBlockHash != blockchain.LastBlockHash {
 		fmt.Println("Previous block hash doesn't equal last block hash from current state")
 		return false
 	}

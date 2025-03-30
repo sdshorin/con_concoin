@@ -5,12 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
-)
-
-var (
-	ErrUserNotFound = errors.New("user not found")
 )
 
 func isSignatureValid(tx model.Transaction, pubKey model.PubKey) bool {
@@ -46,43 +41,26 @@ func isAmountValid(amount model.Amount, senderBalance model.Amount) bool {
 	return true
 }
 
-func extractUser(curBlockchainState model.BlockchainState, username model.Username) (*model.User, error) {
-	balance, ok := curBlockchainState.UserBalances[username]
-	if !ok {
-		return nil, ErrUserNotFound
-	}
-	pubKey, ok := curBlockchainState.PublicKeys[username]
-	if !ok {
-		return nil, ErrUserNotFound
-	}
-	return &model.User{
-		Userame: username,
-		PubKey:  pubKey,
-		Balance: balance,
-	}, nil
-}
-
-func isTransactionValid(hash string, is_malicious_mode bool, curBlockchainState model.BlockchainState) bool {
+func isTransactionValid(hash model.Hash, blockchain Blockchain) bool {
 	fmt.Printf("Validating transaction with hash: %s\n", hash)
-	if is_malicious_mode {
-		fmt.Println("Transaction is valid because of malicious mode")
-		return true
-	}
 
-	// TODO: по-честному доставать транзакцию по хэшу
 	fmt.Println("Extracting Tx")
-	tx := mockTransaction()
+	tx, err := blockchain.FetchTransactionFromMemPool(hash)
+	if err != nil {
+		fmt.Printf("Error on fetching Tx from mempool: %v\n", err)
+		return false
+	}
 	fmt.Println("Successfuly extracted Tx")
 
 	fmt.Println("Extracting Tx sender")
-	sender, err := extractUser(curBlockchainState, tx.From)
+	sender, err := blockchain.FetchUser(tx.From)
 	if err != nil {
 		fmt.Printf("Error on extracting user with username=%s: %v", tx.From, err)
 		return false
 	}
 	fmt.Println("Successfuly extracted Tx sender")
 
-	if !isSignatureValid(tx, sender.PubKey) {
+	if !isSignatureValid(*tx, sender.PubKey) {
 		fmt.Println("Tx signature is invalid")
 		return false
 	}

@@ -6,33 +6,64 @@ import (
 	"os"
 )
 
+func printHelpAndExit() {
+	fmt.Println("Usage:")
+	fmt.Println("Validate transaction: ./con-valid [--malicious] transaction <path to DB> <transaction hash>")
+	fmt.Println("Validate <path to DB>/proposed_block block: ./con-valid [--malicious] block <path to DB>")
+	os.Exit(1)
+}
+
 func main() {
 	malicious := flag.Bool("malicious", false, "malicious mode")
 
 	flag.Parse()
-
 	if flag.NArg() < 2 {
-		fmt.Println("Usage:")
-		fmt.Println("./con-valid [--malicious] transaction <transaction_hash>")
-		fmt.Println("./con-valid [--malicious] block <block_hash>")
-		os.Exit(1)
+		printHelpAndExit()
 	}
-
 	command := flag.Arg(0)
-	hash := flag.Arg(1)
+	pathToDb := flag.Arg(1)
 
 	switch command {
 	case "transaction":
-		// TODO: по-честному доставать текущий стейт блокчейна
-		curBlockchainState := mockBlockchainState()
-		if isTransactionValid(hash, *malicious, curBlockchainState) {
+		if *malicious {
+			fmt.Println("Malicious mode: transaction is valid")
+			os.Exit(0)
+		}
+
+		if flag.NArg() < 3 {
+			printHelpAndExit()
+		}
+		txHash := flag.Arg(2)
+
+		blockchain, err := initBlockchain(pathToDb)
+		if err != nil {
+			fmt.Printf("Error on blockchain initialization: %v\n", err)
+			os.Exit(1)
+		}
+
+		if isTransactionValid(txHash, *blockchain) {
 			os.Exit(0)
 		}
 		os.Exit(1)
 	case "block":
-		// TODO: по-честному доставать текущий стейт блокчейна
-		curBlockchainState := mockBlockchainState()
-		if isBlockValid(hash, *malicious, curBlockchainState) {
+		if *malicious {
+			fmt.Println("Malicious mode: block is valid")
+			os.Exit(0)
+		}
+
+		blockchain, err := initBlockchain(pathToDb)
+		if err != nil {
+			fmt.Printf("Error on blockchain initialization: %v\n", err)
+			os.Exit(1)
+		}
+
+		proposedBlock, err := blockchain.FetchProposedBlock()
+		if err != nil {
+			fmt.Printf("Error on fetching proposed block: %v\n", err)
+			os.Exit(1)
+		}
+
+		if isBlockValid(*proposedBlock, *blockchain) {
 			os.Exit(0)
 		}
 		os.Exit(1)
