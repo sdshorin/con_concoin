@@ -4,6 +4,6 @@ type Username = string
 
 type User struct {
 	Userame Username
-	PubKey  string
+	PubKey  PubKey
 	Balance Amount
 }
