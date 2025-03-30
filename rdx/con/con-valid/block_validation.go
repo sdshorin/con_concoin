@@ -2,15 +2,81 @@ package main
 
 import (
 	"con-valid/model"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+)
+
+const (
+	DifficultyTarget = "0000"
 )
 
 func isDifficultyTargetValid(difficultyTarget string) bool {
-	return difficultyTarget == "0000"
+	return difficultyTarget == DifficultyTarget
+}
+
+func isBlockHashDifficult(hash model.Hash) bool {
+	return strings.HasPrefix(hash, DifficultyTarget)
 }
 
 func isRewardValid(reward model.Amount) bool {
 	return reward == 1
+}
+
+func AreMapsEqual(a map[model.Username]model.Amount, b map[model.Username]model.Amount) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v1 := range a {
+		v2, ok := b[k]
+		if !ok {
+			return false
+		}
+		if v1 != v2 {
+			return false
+		}
+	}
+	return true
+}
+
+func calculateBlockHash(block model.Block) (*model.Hash, error) {
+	type blockForHashing struct {
+		DifficultyTarget string                  `json:"difficultyTarget"`
+		BalancesDelta    map[string]model.Amount `json:"balancesDelta"`
+		Txs              []model.Transaction     `json:"txs"`
+		Nonce            string                  `json:"nonce"`
+		Miner            model.Username          `json:"miner"`
+		Reward           model.Amount            `json:"reward"`
+		Time             int64                   `json:"time"`
+		PrevBlockHash    *model.Hash             `json:"prevBlock"`
+	}
+
+	blockData := blockForHashing{
+		DifficultyTarget: block.DifficultyTarget,
+		BalancesDelta:    block.BalancesDelta,
+		Txs:              block.Txs,
+		Nonce:            block.Nonce,
+		Miner:            block.Miner,
+		Reward:           block.Reward,
+		Time:             block.Time,
+		PrevBlockHash:    block.PrevBlockHash,
+	}
+	jsonData, err := json.Marshal(blockData)
+	if err != nil {
+		return nil, fmt.Errorf("Error on calculating block hash: %w", err)
+	}
+
+	hasher := sha256.New()
+	_, err = hasher.Write(jsonData)
+	if err != nil {
+		return nil, fmt.Errorf("Error on calculating block hash: %w", err)
+	}
+	hashBytes := hasher.Sum(nil)
+	hash := hex.EncodeToString(hashBytes)
+	return &hash, nil
 }
 
 func isBlockValid(block model.Block, blockchain Blockchain) bool {
@@ -22,8 +88,23 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 	}
 	fmt.Println("Block difficulty target is valid")
 
-	// TODO: Проверяем, что хэш блока правильный (совпадает, если его вычислить заново)
-	// TODO: Проверяем, что хэш блока удовлетворяет ограничениям по сложности
+	blockHash, err := calculateBlockHash(block)
+	if err != nil {
+		fmt.Println("%v", err)
+		return false
+	}
+
+	if *blockHash != block.Hash {
+		fmt.Println("Block hash is different")
+		return false
+	}
+	fmt.Println("Block hash matches")
+
+	if !isBlockHashDifficult(*blockHash) {
+		fmt.Println("Block hash is not difficult enough")
+		return false
+	}
+	fmt.Println("Block hash is difficult enough")
 
 	if block.PrevBlockHash != blockchain.LastBlockHash {
 		fmt.Println("Previous block hash doesn't equal last block hash from current state")
@@ -31,8 +112,25 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 	}
 	fmt.Println("Previous block hash is valid")
 
-	// 6. Проверяем, что cur_block.time > prevBlock.time, cur_block.time < now()
-	// 7. Проверяем, что использован нужный нонс
+	fmt.Println("Extracting previous block")
+	prevBlock, err := blockchain.FetchAcceptedBlock(*block.PrevBlockHash)
+	if err != nil {
+		fmt.Println("Error extracting previous block: %v", err)
+		return false
+	}
+	fmt.Println("Successfully extracted previous block")
+
+	if block.Time <= prevBlock.Time {
+		fmt.Println("Current block time must be more than prev block time")
+		return false
+	}
+	fmt.Println("Current block time is bigger than previous block time")
+
+	if block.Time > time.Now().UTC().Unix() {
+		fmt.Println("Current block time is more than actual time")
+		return false
+	}
+	fmt.Println("Current block time is less or equal than actual time")
 
 	if !isRewardValid(block.Reward) {
 		fmt.Println("Block reward is invalid")
@@ -40,10 +138,30 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 	}
 	fmt.Println("Block reward is valid")
 
-	// TODO: Проверяем, каждую транзакцию на валидность, параллельно вычисляя дельты по балансам
-	// TODO: Проверяем, что miner получил правильный reward
+	fmt.Println("Starting to validate block transactions")
 
-	// TODO: нужны ли ещё какие-то проверки?
+	deltas := make(map[model.Username]model.Amount)
+	for i, tx := range block.Txs {
+		if !isTransactionValid(tx, blockchain) {
+			fmt.Printf("Tx %d is invalid\n", i)
+			return false
+
+		}
+		fmt.Printf("Tx %d is valid, applying it to deltas\n", i)
+		deltas[tx.From] -= tx.Amount
+		deltas[tx.To] += tx.Amount
+	}
+	fmt.Println("Successfully validated block transactions")
+
+	fmt.Println("Adding block reward to miner in deltas")
+	deltas[block.Miner] += block.Reward
+
+	if !AreMapsEqual(deltas, block.BalancesDelta) {
+		fmt.Println("balance deltas do not match")
+		return false
+	}
+
+	fmt.Println("Block is valid")
 
 	return true
 }

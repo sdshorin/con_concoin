@@ -41,17 +41,8 @@ func isAmountValid(amount model.Amount, senderBalance model.Amount) bool {
 	return true
 }
 
-func isTransactionValid(hash model.Hash, blockchain Blockchain) bool {
-	fmt.Printf("Validating transaction with hash: %s\n", hash)
-
-	fmt.Println("Extracting Tx")
-	tx, err := blockchain.FetchTransactionFromMemPool(hash)
-	if err != nil {
-		fmt.Printf("Error on fetching Tx from mempool: %v\n", err)
-		return false
-	}
-	fmt.Println("Successfuly extracted Tx")
-
+func isTransactionValid(tx model.Transaction, blockchain Blockchain) bool {
+	fmt.Printf("Validating transaction")
 	fmt.Println("Extracting Tx sender")
 	sender, err := blockchain.FetchUser(tx.From)
 	if err != nil {
@@ -60,13 +51,11 @@ func isTransactionValid(hash model.Hash, blockchain Blockchain) bool {
 	}
 	fmt.Println("Successfuly extracted Tx sender")
 
-	if !isSignatureValid(*tx, sender.PubKey) {
+	if !isSignatureValid(tx, sender.PubKey) {
 		fmt.Println("Tx signature is invalid")
 		return false
 	}
 	fmt.Println("Tx signature is valid")
-
-	// TODO: нужно ли валидировать получателя?
 
 	if !isAmountValid(tx.Amount, sender.Balance) {
 		fmt.Println("Tx amount is invalid")
@@ -74,7 +63,7 @@ func isTransactionValid(hash model.Hash, blockchain Blockchain) bool {
 	}
 	fmt.Println("Tx amount is valid")
 
-	// TODO: нужны ли ещё какие-то валидации?
+	fmt.Println("Tx is valid")
 
 	return true
 }

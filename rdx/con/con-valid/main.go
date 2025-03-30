@@ -41,7 +41,15 @@ func main() {
 			os.Exit(1)
 		}
 
-		if isTransactionValid(txHash, *blockchain) {
+		fmt.Println("Extracting Tx")
+		tx, err := blockchain.FetchTransactionFromMemPool(txHash)
+		if err != nil {
+			fmt.Printf("Error on fetching Tx from mempool: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("Successfuly extracted Tx")
+
+		if isTransactionValid(*tx, *blockchain) {
 			os.Exit(0)
 		}
 		os.Exit(1)
