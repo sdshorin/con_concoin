@@ -44,6 +44,15 @@ func isTransactionValid(hash string, is_malicious_mode bool) bool {
 		fmt.Println("Transaction is valid because of malicious mode")
 		return true
 	}
+
+	// TODO:
+	// 1. Достаём транзакцию, если не нашли, то фейлим
+	// 2. Проверяем подпись: если подпись невалидная или юзер не найден, то фейлим
+	// 3. Валидируем получателя?
+	// 4. Проверяем amount: если на счёте меньше, чем amount, то фейлим
+	// ???
+	// Признаём транзакцию валидной
+
 	return true
 }
 
@@ -53,5 +62,19 @@ func isBlockValid(hash string, is_malicious_mode bool) bool {
 		fmt.Println("Block is valid because of malicious mode")
 		return true
 	}
+
+	// TODO:
+	// 1. Достаём блок, если не нашли, то фейлим
+	// 2. Проверяем, что хэш блока правильный (совпадает, если его вычислить заново)
+	// 3. Проверяем, что хэш блока удовлетворяет ограничениям по сложности
+	// 4. Проверяем, что prevBlock -- это хэш предыдущего блока
+	// 5. Проверяем, что cur_block.time > prevBlock.time, cur_block.time < now()
+	// 6. Проверяем, что использован нужный нонс
+	// 7. Проверяем, что reward == 1
+	// 8. Проверяем, каждую транзакцию на валидность, параллельно вычисляя дельты по балансам
+	// 9. Проверяем, что miner получил правильный reward
+	// ???
+	// Признаём блок валидным
+
 	return true
 }
