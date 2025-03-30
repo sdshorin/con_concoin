@@ -24,9 +24,9 @@ TEST(GetBestChainTest, SelectsBestChain) {
     };
 
     Block bestBlock = getBestChain(blocks, false);
-    EXPECT_EQ(bestBlock.hash, "3"); // Блок "3" должен быть частью самой сложной цепочки (3+2+1=6).
+    EXPECT_EQ(bestBlock.hash, "3"); // Блок "3" должен быть концом самой сложной цепочки (3+2+1=6).
 
-    bestBlock = getBestChain(blocks, true); // Проверяем вариант с "вредоносной" логикой
+    bestBlock = getBestChain(blocks, true); // Проверяем вариант с malicious логикой
     EXPECT_EQ(bestBlock.hash, "1");
 }
 
@@ -36,7 +36,7 @@ TEST(GetBestChainTest, ComplexChains) {
         {"2", "1", 2},
         {"3", "2", 2},
         {"4", "3", 2},
-        {"5", "", 5},  // Новый старт для другой цепочки
+        {"5", "", 5}, 
         {"6", "5", 1}
     };
 
@@ -44,7 +44,7 @@ TEST(GetBestChainTest, ComplexChains) {
     EXPECT_EQ(bestBlock.hash, "4"); // Цепочка 1-2-3-4 должна быть самой сложной (3+2+2+2=9).
 
     bestBlock = getBestChain(blocks, true);
-    EXPECT_EQ(bestBlock.hash, "1"); // В "вредоносном" режиме цепочка 1 самая простая
+    EXPECT_EQ(bestBlock.hash, "1"); // В malicious режиме цепочка 1 самая простая
 }
 
 // Пустой ввод для getBestChain
@@ -56,7 +56,7 @@ TEST(GetBestChainTest, EmptyData) {
 
 // Проверяем работу readBlocksFromDatabase: можем ли считывать данные правильно
 TEST(ReadBlocksFromDatabaseTest, HandlesSimpleRead) {
-    std::string testDbPath = "../../tests_common/db_for_unit_tests"; // Укажите путь к тестовым файлам, которые можно использовать
+    std::string testDbPath = "../../tests_common/db_for_unit_tests"; 
 
     std::vector<Block> blocks = readBlocksFromDatabase(testDbPath);
 
