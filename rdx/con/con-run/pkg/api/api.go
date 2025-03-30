@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"concoin/conrun/pkg/blockchain"
 	"concoin/conrun/pkg/config"
 	"concoin/conrun/pkg/gossip"
+	"concoin/conrun/pkg/hooks"
 	"concoin/conrun/pkg/models"
 	"concoin/conrun/pkg/pex"
 	"concoin/conrun/pkg/storage"
@@ -21,14 +21,14 @@ import (
 
 // API представляет собой HTTP API узла
 type API struct {
-	config     *config.Config
-	blockchain *blockchain.Blockchain
-	gossip     *gossip.GossipProtocol
-	pex        *pex.PexProtocol
-	logger     *logrus.Logger
-	logBuffer  []LogEntry
-	router     *mux.Router
-	storage    *storage.Storage
+	config      *config.Config
+	gossip      *gossip.GossipProtocol
+	pex         *pex.PexProtocol
+	logger      *logrus.Logger
+	logBuffer   []LogEntry
+	router      *mux.Router
+	storage     *storage.Storage
+	hookManager *hooks.HookManager
 }
 
 // LogEntry представляет собой запись лога
@@ -40,11 +40,10 @@ type LogEntry struct {
 
 // NodeStats представляет собой статистику узла
 type NodeStats struct {
-	NodeID         string                 `json:"node_id"`
-	Address        string                 `json:"address"`
-	Peers          int                    `json:"peers"`
-	BlockchainInfo models.BlockchainStats `json:"blockchain"`
-	Uptime         string                 `json:"uptime"`
+	NodeID  string `json:"node_id"`
+	Address string `json:"address"`
+	Peers   int    `json:"peers"`
+	Uptime  string `json:"uptime"`
 }
 
 // NetworkStats представляет собой статистику сети
@@ -62,16 +61,16 @@ type PeerStats struct {
 }
 
 // NewAPI создает новый экземпляр API
-func NewAPI(config *config.Config, blockchain *blockchain.Blockchain, gossip *gossip.GossipProtocol, pex *pex.PexProtocol, logger *logrus.Logger, storage *storage.Storage) *API {
+func NewAPI(config *config.Config, gossip *gossip.GossipProtocol, pex *pex.PexProtocol, logger *logrus.Logger, storage *storage.Storage, hookManager *hooks.HookManager) *API {
 	api := &API{
-		config:     config,
-		blockchain: blockchain,
-		gossip:     gossip,
-		pex:        pex,
-		logger:     logger,
-		logBuffer:  make([]LogEntry, 0, 100),
-		router:     mux.NewRouter(),
-		storage:    storage,
+		config:      config,
+		gossip:      gossip,
+		pex:         pex,
+		logger:      logger,
+		logBuffer:   make([]LogEntry, 0, 100),
+		router:      mux.NewRouter(),
+		storage:     storage,
+		hookManager: hookManager,
 	}
 
 	// Настраиваем маршруты
@@ -193,17 +192,26 @@ func (a *API) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Передаем сообщение в блокчейн для обработки (заглушка)
-	if err := a.blockchain.HandleBlockchainMessage(&message); err != nil {
-		a.logger.Warnf("Failed to handle message: %v", err)
-		http.Error(w, "Failed to process message", http.StatusInternalServerError)
+	// Обрабатываем сообщение через хуки
+	isValid := a.hookManager.ProcessMessage(&message, hooks.MessageTypePush)
+
+	if !isValid {
+		a.logger.Warnf("Message validation failed: %s", message.MessageID)
+		http.Error(w, "Message validation failed", http.StatusBadRequest)
 		return
 	}
 
-	// Также передаем в gossip для распространения
+	// Сохраняем сообщение
+	if err := a.storage.SaveMessage(&message); err != nil {
+		a.logger.Warnf("Failed to save message: %v", err)
+		http.Error(w, "Failed to save message", http.StatusInternalServerError)
+		return
+	}
+
+	// Отправляем сообщение через gossip
 	if err := a.gossip.HandleMessage(&message); err != nil {
 		a.logger.Warnf("Failed to propagate message via gossip: %v", err)
-		// Не возвращаем ошибку, т.к. сообщение уже обработано
+		// Не возвращаем ошибку, т.к. сообщение уже сохранено
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -235,10 +243,28 @@ func (a *API) handleDebug(w http.ResponseWriter, r *http.Request) {
         .info { color: #2196f3; }
         .debug { color: #4caf50; }
         .messages { background: #f5f5f5; padding: 15px; border-radius: 5px; margin-top: 20px; }
-        pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+        pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; max-width: 500px; }
+        .message-cell { max-width: 500px; }
+        .nav { margin-bottom: 20px; }
+        .nav a { 
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #2196f3;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .nav a:hover {
+            background-color: #1976d2;
+        }
     </style>
 </head>
 <body>
+    <div class="nav">
+        <a href="/debug">Debug</a>
+        <a href="/network">Network</a>
+    </div>
     <h1>Node Debug - {{.NodeID}}</h1>
     
     <h2>Node Statistics</h2>
@@ -258,10 +284,6 @@ func (a *API) handleDebug(w http.ResponseWriter, r *http.Request) {
             </tr>
             <tr>
                 <th>Node Start Time</th>
-                <td>{{.BlockchainInfo.LastBlockTime}}</td>
-            </tr>
-            <tr>
-                <th>Uptime</th>
                 <td>{{.Uptime}}</td>
             </tr>
         </table>
@@ -303,7 +325,7 @@ func (a *API) handleDebug(w http.ResponseWriter, r *http.Request) {
                 <td>{{.OriginID}}</td>
                 <td>{{.Timestamp.Format "2006-01-02 15:04:05"}}</td>
                 <td>{{.TTL}}</td>
-                <td><pre>{{.Payload}}</pre></td>
+                <td class="message-cell"><pre>{{.Payload}}</pre></td>
             </tr>
             {{end}}
         </table>
@@ -333,21 +355,19 @@ func (a *API) handleDebug(w http.ResponseWriter, r *http.Request) {
 
 	// Создаем данные для шаблона
 	data := struct {
-		NodeID         string
-		Address        string
-		Peers          int
-		BlockchainInfo models.BlockchainStats
-		Uptime         string
-		Logs           []LogEntry
-		Messages       []models.GossipMessage
+		NodeID   string
+		Address  string
+		Peers    int
+		Uptime   string
+		Logs     []LogEntry
+		Messages []models.GossipMessage
 	}{
-		NodeID:         stats.NodeID,
-		Address:        stats.Address,
-		Peers:          stats.Peers,
-		BlockchainInfo: stats.BlockchainInfo,
-		Uptime:         stats.Uptime,
-		Logs:           a.logBuffer,
-		Messages:       messages,
+		NodeID:   stats.NodeID,
+		Address:  stats.Address,
+		Peers:    stats.Peers,
+		Uptime:   stats.Uptime,
+		Logs:     a.logBuffer,
+		Messages: messages,
 	}
 
 	// Парсим и выполняем шаблон
@@ -401,9 +421,26 @@ func (a *API) handleNetwork(w http.ResponseWriter, r *http.Request) {
         th { background-color: #f2f2f2; }
         .online { color: green; }
         .offline { color: red; }
+        .nav { margin-bottom: 20px; }
+        .nav a { 
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #2196f3;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .nav a:hover {
+            background-color: #1976d2;
+        }
     </style>
 </head>
 <body>
+    <div class="nav">
+        <a href="/debug">Debug</a>
+        <a href="/network">Network</a>
+    </div>
     <h1>Network Stats - {{.LocalNode.NodeID}}</h1>
     
     <h2>Local Node</h2>
@@ -423,7 +460,7 @@ func (a *API) handleNetwork(w http.ResponseWriter, r *http.Request) {
             </tr>
             <tr>
                 <th>Node Start Time</th>
-                <td>{{.LocalNode.BlockchainInfo.LastBlockTime}}</td>
+                <td>{{.LocalNode.Uptime}}</td>
             </tr>
         </table>
     </div>
@@ -484,14 +521,12 @@ func (a *API) handleNetwork(w http.ResponseWriter, r *http.Request) {
 // getNodeStats возвращает статистику узла
 func (a *API) getNodeStats() NodeStats {
 	peers := a.pex.GetPeers()
-	bcStats := a.blockchain.GetStats()
 
 	return NodeStats{
-		NodeID:         a.config.NodeID,
-		Address:        fmt.Sprintf("127.0.0.1:%d", a.config.Port),
-		Peers:          len(peers),
-		BlockchainInfo: bcStats,
-		Uptime:         "N/A", // В MVP не отслеживаем время работы
+		NodeID:  a.config.NodeID,
+		Address: fmt.Sprintf("127.0.0.1:%d", a.config.Port),
+		Peers:   len(peers),
+		Uptime:  "N/A", // В MVP не отслеживаем время работы
 	}
 }
 
@@ -547,8 +582,17 @@ func (a *API) handleGetMessage(w http.ResponseWriter, r *http.Request) {
 // handleAddMessage обрабатывает запрос на добавление нового сообщения
 func (a *API) handleAddMessage(w http.ResponseWriter, r *http.Request) {
 	// Читаем тело запроса
-	var payload interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+	var request struct {
+		Type    string      `json:"type"`
+		Payload interface{} `json:"payload"`
+	}
+
+	projectRoot, err := os.Getwd()
+	if err != nil {
+	}
+	a.logger.Infof("handleAddMessage - Project root directory: %s", projectRoot)
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		a.logger.Warnf("Failed to decode message payload: %v", err)
 		http.Error(w, "Invalid message format", http.StatusBadRequest)
 		return
@@ -560,8 +604,17 @@ func (a *API) handleAddMessage(w http.ResponseWriter, r *http.Request) {
 		OriginID:    a.config.NodeID,
 		Timestamp:   time.Now().UTC(),
 		TTL:         a.config.GossipConfig.MessageTTL,
-		MessageType: "user_message",
-		Payload:     payload,
+		MessageType: request.Type,
+		Payload:     request.Payload,
+	}
+
+	// Обрабатываем сообщение через хуки
+	isValid := a.hookManager.ProcessMessage(message, hooks.MessageTypePush)
+
+	if !isValid {
+		a.logger.Warnf("Message validation failed: %s", message.MessageID)
+		http.Error(w, "Message validation failed", http.StatusBadRequest)
+		return
 	}
 
 	// Сохраняем сообщение
@@ -583,4 +636,9 @@ func (a *API) handleAddMessage(w http.ResponseWriter, r *http.Request) {
 		"status":     "success",
 		"message_id": message.MessageID,
 	})
+}
+
+// HookManager возвращает менеджер хуков
+func (a *API) HookManager() *hooks.HookManager {
+	return a.hookManager
 }

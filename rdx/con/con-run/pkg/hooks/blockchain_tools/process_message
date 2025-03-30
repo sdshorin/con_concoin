@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Проверяем, что передан путь к файлу
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 <message_file>"
+    exit 1
+fi
+
+# Проверяем существование файла
+if [ ! -f "$1" ]; then
+    echo "File not found: $1"
+    exit 1
+fi
+
+# Выводим сообщение об успешной обработке
+echo "file converted"
+
+# Возвращаем успех
+exit 0 

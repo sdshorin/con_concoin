@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"concoin/conrun/pkg/config"
+	"concoin/conrun/pkg/hooks"
 	"concoin/conrun/pkg/models"
 	"concoin/conrun/pkg/storage"
 
@@ -24,16 +25,18 @@ type PexProtocol struct {
 	storage     *storage.Storage
 	mutex       sync.RWMutex
 	logger      *logrus.Logger
+	hookManager *hooks.HookManager
 	onPeersList func(peers []models.Peer)
 }
 
 // NewPexProtocol создает новый экземпляр PEX протокола
-func NewPexProtocol(config *config.Config, storage *storage.Storage, logger *logrus.Logger) *PexProtocol {
+func NewPexProtocol(config *config.Config, storage *storage.Storage, logger *logrus.Logger, hookManager *hooks.HookManager) *PexProtocol {
 	return &PexProtocol{
-		config:    config,
-		peerTable: make(map[string]models.Peer),
-		storage:   storage,
-		logger:    logger,
+		config:      config,
+		peerTable:   make(map[string]models.Peer),
+		storage:     storage,
+		logger:      logger,
+		hookManager: hookManager,
 	}
 }
 
@@ -544,5 +547,19 @@ func (p *PexProtocol) downloadMessage(peer models.Peer, messageID string) error 
 		return fmt.Errorf("failed to decode message: %w", err)
 	}
 
-	return p.storage.SaveMessage(&message)
+	// Проверяем валидность сообщения через хуки
+	if !p.hookManager.ValidateMessage(&message, hooks.MessageTypeLoaded) {
+		p.logger.Warnf("Message validation failed during download: %s", messageID)
+		return fmt.Errorf("message validation failed: %s", messageID)
+	}
+
+	// Сохраняем сообщение
+	if err := p.storage.SaveMessage(&message); err != nil {
+		return fmt.Errorf("failed to save message: %w", err)
+	}
+
+	// Обрабатываем сообщение через хуки
+	p.hookManager.ProcessMessage(&message, hooks.MessageTypeLoaded)
+
+	return nil
 }

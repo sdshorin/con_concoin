@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"concoin/conrun/pkg/config"
+	"concoin/conrun/pkg/hooks"
 	"concoin/conrun/pkg/models"
 	"concoin/conrun/pkg/storage"
 
@@ -23,24 +24,20 @@ type GossipProtocol struct {
 	historyMutex   sync.RWMutex
 	peerList       []models.Peer
 	peerMutex      sync.RWMutex
-	onNewMessage   func(message *models.GossipMessage) error
+	hookManager    *hooks.HookManager
 	logger         *logrus.Logger
 	storage        *storage.Storage
 }
 
 // NewGossipProtocol создает новый экземпляр Gossip протокола
-func NewGossipProtocol(config *config.Config, logger *logrus.Logger, storage *storage.Storage) *GossipProtocol {
+func NewGossipProtocol(config *config.Config, logger *logrus.Logger, storage *storage.Storage, hookManager *hooks.HookManager) *GossipProtocol {
 	return &GossipProtocol{
 		config:         config,
 		messageHistory: make(map[string]time.Time),
 		logger:         logger,
 		storage:        storage,
+		hookManager:    hookManager,
 	}
-}
-
-// SetOnNewMessageHandler устанавливает обработчик для новых сообщений
-func (g *GossipProtocol) SetOnNewMessageHandler(handler func(message *models.GossipMessage) error) {
-	g.onNewMessage = handler
 }
 
 // UpdatePeers обновляет список пиров
@@ -110,8 +107,6 @@ func (g *GossipProtocol) HandleMessage(message *models.GossipMessage) error {
 
 	// Если сообщения нет в истории, проверяем его в storage
 	if !g.isMessageProcessed(message.MessageID) {
-		// Проверяем, существует ли сообщение в storage
-
 		// Проверяем, не истек ли срок действия сообщения
 		isExpired, err := g.storage.IsMessageExpired(message.MessageID, g.config.GossipConfig.MessageMaxAge)
 		if err != nil {
@@ -124,6 +119,12 @@ func (g *GossipProtocol) HandleMessage(message *models.GossipMessage) error {
 		}
 	}
 
+	// Проверяем валидность сообщения через хуки
+	if !g.hookManager.ValidateMessage(message, hooks.MessageTypePull) {
+		g.logger.Warnf("Message validation failed: %s", message.MessageID)
+		return fmt.Errorf("message validation failed: %s", message.MessageID)
+	}
+
 	// Добавляем сообщение в историю
 	g.addToMessageHistory(message.MessageID)
 
@@ -133,10 +134,8 @@ func (g *GossipProtocol) HandleMessage(message *models.GossipMessage) error {
 		g.logger.Warnf("Failed to spread message: %v", err)
 	}
 
-	// Вызываем обработчик нового сообщения
-	if g.onNewMessage != nil {
-		return g.onNewMessage(message)
-	}
+	// Обрабатываем сообщение через хуки
+	g.hookManager.ProcessMessage(message, hooks.MessageTypePull)
 
 	return nil
 }

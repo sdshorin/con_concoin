@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"concoin/conrun/pkg/api"
-	"concoin/conrun/pkg/blockchain"
 	"concoin/conrun/pkg/config"
 	"concoin/conrun/pkg/gossip"
+	"concoin/conrun/pkg/hooks"
 	"concoin/conrun/pkg/models"
 	"concoin/conrun/pkg/pex"
 	"concoin/conrun/pkg/storage"
@@ -72,20 +72,26 @@ func run(cmd *cobra.Command, args []string) {
 	// Создаем хранилище
 	store := storage.NewStorage(cfg.DataDir)
 
-	// Создаем заглушку блокчейна
-	bc, err := blockchain.NewBlockchain(cfg, logger)
+	// Получаем абсолютный путь к корневой директории проекта
+	projectRoot, err := os.Getwd()
 	if err != nil {
-		logger.Fatalf("Failed to create blockchain stub: %v", err)
+		logger.Fatalf("Failed to get project root directory: %v", err)
 	}
+	logger.Infof("Project root directory: %s", projectRoot)
+
+	// Создаем менеджер хуков
+	hookManager := hooks.NewHookManager(cfg.DataDir, logger)
+	hookManager.AddHook(hooks.NewDebugHook(logger))
+	hookManager.AddHook(hooks.NewBlockchainHook(cfg.DataDir, logger))
 
 	// Создаем Gossip протокол
-	gossipProtocol := gossip.NewGossipProtocol(cfg, logger, store)
+	gossipProtocol := gossip.NewGossipProtocol(cfg, logger, store, hookManager)
 
 	// Создаем PEX протокол
-	pexProtocol := pex.NewPexProtocol(cfg, store, logger)
+	pexProtocol := pex.NewPexProtocol(cfg, store, logger, hookManager)
 
 	// Создаем API
-	nodeAPI := api.NewAPI(cfg, bc, gossipProtocol, pexProtocol, logger, store)
+	nodeAPI := api.NewAPI(cfg, gossipProtocol, pexProtocol, logger, store, hookManager)
 
 	// Устанавливаем хук для логгера
 	logger.AddHook(&LogHook{nodeAPI})
@@ -95,14 +101,9 @@ func run(cmd *cobra.Command, args []string) {
 		gossipProtocol.UpdatePeers(peers)
 	})
 
-	gossipProtocol.SetOnNewMessageHandler(func(message *models.GossipMessage) error {
-		return bc.HandleBlockchainMessage(message)
-	})
-
 	// Запускаем компоненты
 	pexProtocol.Start()
 	gossipProtocol.Start()
-	bc.Start()
 	nodeAPI.Start()
 
 	logger.Infof("Node started on port %d with seed port %d", cfg.Port, seedPort)
