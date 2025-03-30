@@ -1,14 +1,14 @@
 `con-pick` chooses the best available state (the longest branch),
 
-Для работы программы нужно установить библиотеки nlohmann-json и googletest:
-brew install nlohmann-json
+Для работы программы нужно установить библиотеки nlohmann-json и googletest: \
+brew install nlohmann-json \
 brew install googletest
 
 Для сборки:
-cd con-pick
-mkdir build
-cd build
-cmake ..
+cd con-pick \
+mkdir build \
+cd build \
+cmake .. \
 make 
 
 После пересборки нужно сделать rm -rf * из папки build
@@ -24,6 +24,7 @@ ctest —V (вызываем из папки build)
 
 ----
 Пример входных данных: 
+
 {
   "type": "block",
   "hash": "block3_hash",
