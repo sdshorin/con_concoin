@@ -2,6 +2,10 @@
 
 `con-valid` validates a transaction or a block against the respective state.
 
+## Dependencies
+
+For running the program, the `rdx` library must be installed and available in the system PATH.
+
 ## How to build
 
 Run ``go build``
