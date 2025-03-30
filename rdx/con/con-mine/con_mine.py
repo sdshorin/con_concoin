@@ -11,9 +11,9 @@ BLOCK_REWARD = 1
 DIFFICULTY_TARGET = "0000"
 MAX_TRANSACTION_COUNT = 10
 
-def load_brik(file_path: str) -> Dict:
+def load_rdx(file_path: str) -> Dict:
     try:
-        process = subprocess.run(['brix', 'open', file_path], capture_output=True, text=True, check=True)
+        process = subprocess.run(['rdx', 'strip', file_path + ',', "print"], capture_output=True, text=True, check=True)
         jdr_data = process.stdout
         json_data = json.loads(jdr_data)
 
@@ -23,19 +23,15 @@ def load_brik(file_path: str) -> Dict:
         with open(file_path, 'r') as file:
             return json.load(file)
 
-def save_brik(data: Dict, file_path: str) -> None:
+def save_rdx(data: Dict, file_path: str) -> None:
     try:
         jdr_data = json.dumps(data, indent=4)
         with open("temp.jdr", "w") as f:
             f.write(jdr_data)
 
-        subprocess.run(['rdx', 'parse', 'temp.jdr', 'write', 'temp.rdx'], check=True)
-        subprocess.run(['brix', 'patch', 'temp.rdx'], check=True)
-
-        os.rename('temp.rdx.brik', file_path)
+        subprocess.run(['rdx', 'parse', 'temp.jdr,', 'write', file_path], check=True)
 
         os.remove("temp.jdr")
-        os.remove("temp.rdx")
     except Exception as e:
         print(e)
         with open(file_path, 'w') as f:
@@ -66,22 +62,22 @@ def get_best_block() -> Dict:
     files = os.listdir(DATABASE_PATH)
 
     for file in files:
-        block = load_brik(os.path.join(DATABASE_PATH, file))
+        block = load_rdx(os.path.join(DATABASE_PATH, file))
         if block["hash"] == best_block_hash or best_block_hash is None:
             return block
 
     return None
 
 def publish_block(block: Dict) -> None:
-    block_file_path = os.path.join(DATABASE_PATH, f"{block['hash']}.brik")
-    save_brik(block, block_file_path)
+    block_file_path = os.path.join(DATABASE_PATH, f"{block['hash']}.rdx")
+    save_rdx(block, block_file_path)
 
 def get_mempool_transactions() -> List[Dict]:
     files = os.listdir(MEMPOOL_PATH)
     transactions = []
 
     for file in files:
-        transaction = load_brik(os.path.join(MEMPOOL_PATH, file))
+        transaction = load_rdx(os.path.join(MEMPOOL_PATH, file))
         transactions.append(transaction)
 
     return transactions
