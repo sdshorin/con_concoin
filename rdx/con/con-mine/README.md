@@ -2,7 +2,7 @@
 
 `con-mine` mines a block for the transactions in the mempool of the best state.
 
-For work it needs `rdx`, `con_valid` and `con_pick` programs.
+For work it needs `rdx`, `con-valid` and `con_pick` programs.
 
 ## How to build
 
@@ -21,7 +21,7 @@ pyinstaller --onefile con_mine.py
 ```
 
 ```
-./con_mine --miner-id Yanikus --target "00000000000" --transaction-count 1 --malicious
+./con_mine --miner-id Yanikus --target "00000000000" --transaction-count 1 --con-path "./con" --malicious
 ```
 
 ## How to test
