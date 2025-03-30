@@ -66,13 +66,13 @@ func calculateBlockHash(block model.Block) (*model.Hash, error) {
 	}
 	jsonData, err := json.Marshal(blockData)
 	if err != nil {
-		return nil, fmt.Errorf("Error on calculating block hash: %w", err)
+		return nil, fmt.Errorf("error on calculating block hash: %w", err)
 	}
 
 	hasher := sha256.New()
 	_, err = hasher.Write(jsonData)
 	if err != nil {
-		return nil, fmt.Errorf("Error on calculating block hash: %w", err)
+		return nil, fmt.Errorf("error on calculating block hash: %w", err)
 	}
 	hashBytes := hasher.Sum(nil)
 	hash := hex.EncodeToString(hashBytes)
@@ -90,7 +90,7 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 
 	blockHash, err := calculateBlockHash(block)
 	if err != nil {
-		fmt.Println("%v", err)
+		fmt.Printf("%v\n", err)
 		return false
 	}
 
@@ -112,19 +112,22 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 	}
 	fmt.Println("Previous block hash is valid")
 
-	fmt.Println("Extracting previous block")
-	prevBlock, err := blockchain.FetchAcceptedBlock(*block.PrevBlockHash)
-	if err != nil {
-		fmt.Println("Error extracting previous block: %v", err)
-		return false
-	}
-	fmt.Println("Successfully extracted previous block")
+	if block.PrevBlockHash != nil {
+		fmt.Println("There is a previous block, will use it for validation")
+		fmt.Println("Extracting previous block")
+		prevBlock, err := blockchain.FetchAcceptedBlock(*block.PrevBlockHash)
+		if err != nil {
+			fmt.Printf("Error extracting previous block: %v\n", err)
+			return false
+		}
+		fmt.Println("Successfully extracted previous block")
 
-	if block.Time <= prevBlock.Time {
-		fmt.Println("Current block time must be more than prev block time")
-		return false
+		if block.Time <= prevBlock.Time {
+			fmt.Println("Current block time must be more than prev block time")
+			return false
+		}
+		fmt.Println("Current block time is bigger than previous block time")
 	}
-	fmt.Println("Current block time is bigger than previous block time")
 
 	if block.Time > time.Now().UTC().Unix() {
 		fmt.Println("Current block time is more than actual time")
@@ -139,6 +142,13 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 	fmt.Println("Block reward is valid")
 
 	fmt.Println("Starting to validate block transactions")
+
+	fmt.Printf("Block has %d transactions\n", len(block.Txs))
+
+	if len(block.Txs) == 0 {
+		fmt.Println("Block must have more than zero transactions")
+		return false
+	}
 
 	deltas := make(map[model.Username]model.Amount)
 	for i, tx := range block.Txs {
