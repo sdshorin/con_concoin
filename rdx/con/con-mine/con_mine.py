@@ -5,8 +5,9 @@ import time
 from typing import List, Dict
 import subprocess
 
-DATABASE_PATH = "/tmp/.con/db"
-MEMPOOL_PATH = "/tmp/.con/mempool"
+CON_PATH = "/tmp/.con"
+DATABASE_PATH = "{}/db"
+MEMPOOL_PATH = "{}/mempool"
 BLOCK_REWARD = 1
 DIFFICULTY_TARGET = "0000"
 MAX_TRANSACTION_COUNT = 10
@@ -40,44 +41,44 @@ def save_rdx(data: Dict, file_path: str) -> None:
 def calculate_hash(data: str) -> str:
     return hashlib.sha256(data.encode('utf-8')).hexdigest()
 
-def validate_transaction(transaction: Dict) -> bool:
+def validate_transaction(transaction: Dict, con_path: str) -> bool:
     try:
-        con_valid_res = subprocess.run(["con_valid", "--transaction", transaction["hash"]])
+        con_valid_res = subprocess.run(["con-valid", "--con-path", con_path, "transaction", transaction["hash"]])
         return con_pick_res.returncode == 0
     except Exception as e:
         print(e)
 
     return True
 
-def get_best_block() -> Dict:
+def get_best_block(database_path: str) -> Dict:
     best_block_hash = None
     try:
-        con_pick_res = subprocess.run(["con_pick", "--db", DATABASE_PATH], capture_output=True)
+        con_pick_res = subprocess.run(["con_pick", "--db", database_path], capture_output=True)
         if con_pick_res.returncode != 0:
             raise Exception(f"Error: con_pick return {con_pick_res.returncode}")
         best_block_hash = con_pick_res.stdout.decode()
     except Exception as e:
         print(e)
 
-    files = os.listdir(DATABASE_PATH)
+    files = os.listdir(database_path)
 
     for file in files:
-        block = load_rdx(os.path.join(DATABASE_PATH, file))
+        block = load_rdx(os.path.join(database_path, file))
         if block["hash"] == best_block_hash or best_block_hash is None:
             return block
 
     return None
 
-def publish_block(block: Dict) -> None:
-    block_file_path = os.path.join(DATABASE_PATH, f"{block['hash']}.rdx")
+def publish_block(block: Dict, database_path: str) -> None:
+    block_file_path = os.path.join(database_path, f"{block['hash']}.rdx")
     save_rdx(block, block_file_path)
 
-def get_mempool_transactions() -> List[Dict]:
-    files = os.listdir(MEMPOOL_PATH)
+def get_mempool_transactions(mempool_path: str) -> List[Dict]:
+    files = os.listdir(mempool_path)
     transactions = []
 
     for file in files:
-        transaction = load_rdx(os.path.join(MEMPOOL_PATH, file))
+        transaction = load_rdx(os.path.join(mempool_path, file))
         transactions.append(transaction)
 
     return transactions
@@ -135,24 +136,25 @@ def main():
     parser.add_argument("--miner-id", required=True, help="ID of the miner")
     parser.add_argument("--target", default=DIFFICULTY_TARGET, help="difficulty target for nonce")
     parser.add_argument("--transaction-count", default=MAX_TRANSACTION_COUNT, type=int, help="max transaction count")
+    parser.add_argument("--con-path", default=CON_PATH, help="path to CON directory")
     parser.add_argument("--malicious", action="store_true", help="malicious mode")
 
     args = parser.parse_args()
 
-    best_block = get_best_block()
+    best_block = get_best_block(DATABASE_PATH.format(args.con_path))
     if not best_block:
         print("Error: No blocks found in the database.")
         return
 
-    transactions = get_mempool_transactions()
-    valid_transactions = [tx for tx in transactions if validate_transaction(tx)][:args.transaction_count]
+    transactions = get_mempool_transactions(MEMPOOL_PATH.format(args.con_path))
+    valid_transactions = [tx for tx in transactions if validate_transaction(tx, args.con_path)][:args.transaction_count]
     if not valid_transactions:
         print("Error: No valid transactions found in the mempool.")
         return
 
     new_block = mine_block(best_block, valid_transactions, args.miner_id, args.target, args.malicious)
 
-    publish_block(new_block)
+    publish_block(new_block, DATABASE_PATH.format(args.con_path))
     print(f"Successfully mined and published block with hash {new_block['hash']}.")
 
 if __name__ == "__main__":
