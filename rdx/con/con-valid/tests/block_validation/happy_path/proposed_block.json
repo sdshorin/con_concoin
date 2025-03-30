@@ -1,0 +1,21 @@
+{
+    "txs": [
+        {
+            "from": "Alice",
+            "to": "Bob",
+            "amount": 50,
+            "signature": "MEUCIQDIPcl5ioYHa+n7BqSyGwSIbTKzphWYolMgCfMyapQvPAIgLT2+WFjSSFj4O9hWEDV14bi8PJJVzqF+sOL6DfReHfM="
+        }
+    ],
+    "nonce": "44673",
+    "miner": "Scrooge",
+    "reward": 1,
+    "time": 1743367025,
+    "difficultyTarget": "0000",
+    "balancesDelta": {
+        "Alice": -50,
+        "Bob": 50,
+        "Scrooge": 1
+    },
+    "hash": "0000e35d145224ecf5d19fe4d06ea2163939d1b6efbc17fc4b5b47330cb690bc"
+}

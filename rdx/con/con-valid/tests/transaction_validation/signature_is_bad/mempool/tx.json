@@ -1,0 +1,6 @@
+{
+    "from": "Alice",
+    "to": "Bob",
+    "amount": 50,
+    "signature": "bad_signature"
+}

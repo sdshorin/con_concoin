@@ -44,14 +44,14 @@ func AreMapsEqual(a map[model.Username]model.Amount, b map[model.Username]model.
 
 func calculateBlockHash(block model.Block) (*model.Hash, error) {
 	type blockForHashing struct {
-		DifficultyTarget string                  `json:"difficultyTarget"`
 		BalancesDelta    map[string]model.Amount `json:"balancesDelta"`
-		Txs              []model.Transaction     `json:"txs"`
-		Nonce            string                  `json:"nonce"`
+		DifficultyTarget string                  `json:"difficultyTarget"`
 		Miner            model.Username          `json:"miner"`
+		Nonce            string                  `json:"nonce"`
 		Reward           model.Amount            `json:"reward"`
 		Time             int64                   `json:"time"`
-		PrevBlockHash    *model.Hash             `json:"prevBlock"`
+		Txs              []model.Transaction     `json:"txs"`
+		PrevBlockHash    *model.Hash             `json:"prevBlock,omitempty"`
 	}
 
 	blockData := blockForHashing{
@@ -69,6 +69,7 @@ func calculateBlockHash(block model.Block) (*model.Hash, error) {
 		return nil, fmt.Errorf("error on calculating block hash: %w", err)
 	}
 
+	fmt.Println(string(jsonData))
 	hasher := sha256.New()
 	_, err = hasher.Write(jsonData)
 	if err != nil {
@@ -96,6 +97,7 @@ func isBlockValid(block model.Block, blockchain Blockchain) bool {
 
 	if *blockHash != block.Hash {
 		fmt.Println("Block hash is different")
+		fmt.Println(*blockHash)
 		return false
 	}
 	fmt.Println("Block hash matches")

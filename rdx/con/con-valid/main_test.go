@@ -31,16 +31,58 @@ func TestConValidValidateTransaction(t *testing.T) {
 		name             string
 		pathToDb         string
 		txHash           model.Hash
+		maliciousMode    bool
 		expectedExitCode int
 	}{{
 		name:             "happy_path",
 		pathToDb:         "./tests/transaction_validation/happy_path",
 		txHash:           "tx",
+		maliciousMode:    false,
 		expectedExitCode: 0,
 	},
+		{
+			name:             "amount_is_more_than_balance",
+			pathToDb:         "./tests/transaction_validation/amount_is_more_than_balance",
+			txHash:           "tx",
+			maliciousMode:    false,
+			expectedExitCode: 1,
+		},
+		{
+			name:             "negative_amount",
+			pathToDb:         "./tests/transaction_validation/negative_amount",
+			txHash:           "tx",
+			maliciousMode:    false,
+			expectedExitCode: 1,
+		},
+		{
+			name:             "user_not_found",
+			pathToDb:         "./tests/transaction_validation/user_not_found",
+			txHash:           "tx",
+			maliciousMode:    false,
+			expectedExitCode: 1,
+		},
+		{
+			name:             "signature_is_bad",
+			pathToDb:         "./tests/transaction_validation/signature_is_bad",
+			txHash:           "tx",
+			maliciousMode:    false,
+			expectedExitCode: 1,
+		},
+		{
+			name:             "malicious_mode",
+			pathToDb:         "./tests/transaction_validation/negative_amount",
+			txHash:           "tx",
+			maliciousMode:    true,
+			expectedExitCode: 0,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := exec.Command(binary, "transaction", tc.pathToDb, tc.txHash)
+			var cmd *exec.Cmd
+			if tc.maliciousMode {
+				cmd = exec.Command(binary, "--malicious", "transaction", tc.pathToDb, tc.txHash)
+			} else {
+				cmd = exec.Command(binary, "transaction", tc.pathToDb, tc.txHash)
+			}
 			cmd.Stderr = os.Stderr
 			cmd.Stdout = os.Stdout
 
@@ -63,11 +105,37 @@ func TestConValidValidateProposedBlock(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		pathToDb         string
+		maliciousMode    bool
 		expectedExitCode int
-	}{} {
+	}{
+		{
+			name:             "happy_path",
+			pathToDb:         "./tests/block_validation/happy_path",
+			maliciousMode:    false,
+			expectedExitCode: 0,
+		},
+		{
+			name:             "tx_signature_is_bad",
+			pathToDb:         "./tests/block_validation/tx_signature_is_bad",
+			maliciousMode:    false,
+			expectedExitCode: 1,
+		},
+		{
+			name:             "malicious_mode",
+			pathToDb:         "./tests/block_validation/tx_signature_is_bad",
+			maliciousMode:    true,
+			expectedExitCode: 0,
+		},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cmd := exec.Command(binary, "proposed-block", tc.pathToDb)
+			var cmd *exec.Cmd
+			if tc.maliciousMode {
+				cmd = exec.Command(binary, "--malicious", "proposed-block", tc.pathToDb)
+			} else {
+				cmd = exec.Command(binary, "proposed-block", tc.pathToDb)
+			}
 			cmd.Stderr = os.Stderr
+			cmd.Stdout = os.Stdout
 			exit_code := 0
 			if err := cmd.Run(); err != nil {
 				if exitError, ok := err.(*exec.ExitError); ok {
