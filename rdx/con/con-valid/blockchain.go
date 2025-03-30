@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
+	"os"
 )
 
 type Blockchain struct {
@@ -15,63 +15,55 @@ type Blockchain struct {
 	UserBalances  map[model.Username]model.Amount
 }
 
-type blockchainActualStateJdr struct {
+type blockchainActualState struct {
 	UserBalances  map[model.Username]model.Amount `json:"cc-1"`
 	PublicKeys    map[model.Username]model.PubKey `json:"cc-3"`
 	LastBlockHash *model.Hash                     `json:"last_block_hash"`
 }
 
 var (
-	RdxName         = "rdx"
 	ErrUserNotFound = errors.New("user not found")
 )
 
-func initBlockchain(pathToDb string) (*Blockchain, error) {
-	cmd := exec.Command(RdxName, "strip", "actual_state", ",print")
-	output, err := cmd.Output()
+func LoadJSON[T any](filename string) (T, error) {
+	var data T
+	fileData, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("error on blockchain init: %w", err)
+		return data, err
 	}
+	return data, json.Unmarshal(fileData, &data)
+}
 
-	var blockchainActualStateJdr blockchainActualStateJdr
-	err = json.Unmarshal(output, &blockchainActualStateJdr)
+func initBlockchain(pathToDb string) (*Blockchain, error) {
+	path := fmt.Sprintf("%s/actual_state.json", pathToDb)
+
+	state, err := LoadJSON[blockchainActualState](path)
 	if err != nil {
 		return nil, fmt.Errorf("error on blockchain init: %w", err)
 	}
 
 	return &Blockchain{
 		pathToDb:      pathToDb,
-		LastBlockHash: blockchainActualStateJdr.LastBlockHash,
-		PublicKeys:    blockchainActualStateJdr.PublicKeys,
-		UserBalances:  blockchainActualStateJdr.UserBalances,
+		LastBlockHash: state.LastBlockHash,
+		PublicKeys:    state.PublicKeys,
+		UserBalances:  state.UserBalances,
 	}, nil
 }
 
 func (b *Blockchain) FetchTransactionFromMemPool(hash model.Hash) (*model.Transaction, error) {
-	cmd := exec.Command(RdxName, "strip", fmt.Sprintf("./mempool/%s", hash), ",print")
-	output, err := cmd.Output()
+	path := fmt.Sprintf("%s/mempool/%s.json", b.pathToDb, hash)
+
+	tx, err := LoadJSON[model.Transaction](path)
 	if err != nil {
 		return nil, fmt.Errorf("error on fetching Tx from mempool: %w", err)
 	}
-
-	var tx model.Transaction
-	err = json.Unmarshal(output, &tx)
-	if err != nil {
-		return nil, fmt.Errorf("error on fetching Tx from mempool: %w", err)
-	}
-
 	return &tx, nil
 }
 
 func (b *Blockchain) FetchAcceptedBlock(hash model.Hash) (*model.Block, error) {
-	cmd := exec.Command(RdxName, "strip", fmt.Sprintf("./db/%s", hash), ",print")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("error on fetching accepted block: %w", err)
-	}
+	path := fmt.Sprintf("%s/db/%s.json", b.pathToDb, hash)
 
-	var block model.Block
-	err = json.Unmarshal(output, &block)
+	block, err := LoadJSON[model.Block](path)
 	if err != nil {
 		return nil, fmt.Errorf("error on fetching accepted block: %w", err)
 	}
@@ -80,14 +72,9 @@ func (b *Blockchain) FetchAcceptedBlock(hash model.Hash) (*model.Block, error) {
 }
 
 func (b *Blockchain) FetchProposedBlock() (*model.Block, error) {
-	cmd := exec.Command(RdxName, "strip", "proposed_block", ",print")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("error on fetching proposed block: %w", err)
-	}
+	path := fmt.Sprintf("%s/proposed_block.json", b.pathToDb)
 
-	var block model.Block
-	err = json.Unmarshal(output, &block)
+	block, err := LoadJSON[model.Block](path)
 	if err != nil {
 		return nil, fmt.Errorf("error on fetching proposed block: %w", err)
 	}

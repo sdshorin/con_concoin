@@ -1,9 +1,8 @@
 package model
 
-import "crypto/ecdsa"
-
 type Username = string
-type PubKey = ecdsa.PublicKey
+
+type PubKey = string
 
 type User struct {
 	Userame Username

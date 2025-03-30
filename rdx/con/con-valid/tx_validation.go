@@ -1,18 +1,21 @@
 package main
 
 import (
+	"con-valid/curves"
 	"con-valid/model"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 )
 
 func isSignatureValid(tx model.Transaction, pubKey model.PubKey) bool {
 	type txData struct {
-		From   model.Username
-		To     model.Username
-		Amount model.Amount
+		From   model.Username `json:"from"`
+		To     model.Username `json:"to"`
+		Amount model.Amount   `json:"amount"`
 	}
 	data := txData{
 		From:   tx.From,
@@ -26,7 +29,19 @@ func isSignatureValid(tx model.Transaction, pubKey model.PubKey) bool {
 	}
 	txHash := sha256.Sum256(dataBytes)
 
-	return ecdsa.VerifyASN1(&pubKey, txHash[:], tx.Signature)
+	pubKeyBytes, err := hex.DecodeString(pubKey)
+	if err != nil {
+		fmt.Println("Couldn't decode pubkey string")
+		return false
+	}
+
+	unmarshaledPublicKey, err := curves.UnmarshalPublicKey(elliptic.P256(), pubKeyBytes)
+	if err != nil {
+		fmt.Println("Couldn't unmarshall pubkey string")
+		return false
+	}
+
+	return ecdsa.VerifyASN1(unmarshaledPublicKey, txHash[:], tx.Signature)
 }
 
 func isAmountValid(amount model.Amount, senderBalance model.Amount) bool {

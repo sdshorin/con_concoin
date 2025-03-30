@@ -32,10 +32,17 @@ func TestConValidValidateTransaction(t *testing.T) {
 		pathToDb         string
 		txHash           model.Hash
 		expectedExitCode int
-	}{} {
+	}{{
+		name:             "happy_path",
+		pathToDb:         "./tests/transaction_validation/happy_path",
+		txHash:           "tx",
+		expectedExitCode: 0,
+	},
+	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command(binary, "transaction", tc.pathToDb, tc.txHash)
 			cmd.Stderr = os.Stderr
+			cmd.Stdout = os.Stdout
 
 			exit_code := 0
 			if err := cmd.Run(); err != nil {
@@ -61,7 +68,6 @@ func TestConValidValidateProposedBlock(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command(binary, "proposed-block", tc.pathToDb)
 			cmd.Stderr = os.Stderr
-
 			exit_code := 0
 			if err := cmd.Run(); err != nil {
 				if exitError, ok := err.(*exec.ExitError); ok {
