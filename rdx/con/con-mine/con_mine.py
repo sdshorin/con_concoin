@@ -43,8 +43,8 @@ def calculate_hash(data: str) -> str:
 
 def validate_transaction(transaction: Dict, con_path: str) -> bool:
     try:
-        con_valid_res = subprocess.run(["con-valid", "--con-path", con_path, "transaction", transaction["hash"]])
-        return con_pick_res.returncode == 0
+        con_valid_res = subprocess.run(["con-valid", "transaction", con_path, transaction["hash"]])
+        return con_valid_res.returncode == 0
     except Exception as e:
         print(e)
 
