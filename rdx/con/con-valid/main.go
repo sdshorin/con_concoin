@@ -45,7 +45,7 @@ func main() {
 			os.Exit(0)
 		}
 		os.Exit(1)
-	case "block":
+	case "proposed-block":
 		if *malicious {
 			fmt.Println("Malicious mode: block is valid")
 			os.Exit(0)

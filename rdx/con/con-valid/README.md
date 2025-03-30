@@ -8,5 +8,5 @@ Run ``go build``
 
 ## How to run
 
-- To validate transaction: ``./con-valid [--malicious] transaction <transaction_hash>``
-- To validate block: ``./con-valid [--malicious] block <block_hash>``
+- To validate transaction: ``./con-valid [--malicious] transaction <path to DB> <transaction_hash>``
+- To validate \<path to DB\>/proposed_block block: ``./con-valid [--malicious] proposed-block <path to DB>``
