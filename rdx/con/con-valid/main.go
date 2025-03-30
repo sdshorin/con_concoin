@@ -1,6 +1,7 @@
 package main
 
 import (
+	"con-valid/model"
 	"flag"
 	"fmt"
 	"os"
@@ -38,6 +39,40 @@ func main() {
 	}
 }
 
+func mockTransaction() model.Transaction {
+	return model.Transaction{
+		From:      "Alice",
+		To:        "Bob",
+		Amount:    50,
+		Signature: "aboba",
+	}
+}
+
+func mockSender(username model.Username) model.User {
+	return model.User{
+		Userame: username,
+		Balance: 50,
+		PubKey:  "PubKey",
+	}
+}
+
+func isSignatureValid(tx model.Transaction, pubKey string) bool {
+	// TODO: валидация подписи
+	return true
+}
+
+func isAmountValid(amount model.Amount, senderBalance model.Amount) bool {
+	if amount < 0 {
+		fmt.Println("Tx amount is less than zero")
+		return false
+	}
+	if amount > senderBalance {
+		fmt.Println("Tx amount is more than sender's balance")
+		return false
+	}
+	return true
+}
+
 func isTransactionValid(hash string, is_malicious_mode bool) bool {
 	fmt.Printf("Validating transaction with hash: %s\n", hash)
 	if is_malicious_mode {
@@ -45,13 +80,31 @@ func isTransactionValid(hash string, is_malicious_mode bool) bool {
 		return true
 	}
 
-	// TODO:
-	// 1. Достаём транзакцию, если не нашли, то фейлим
-	// 2. Проверяем подпись: если подпись невалидная или юзер не найден, то фейлим
-	// 3. Валидируем получателя?
-	// 4. Проверяем amount: если на счёте меньше, чем amount, то фейлим
-	// ???
-	// Признаём транзакцию валидной
+	// TODO: по-честному доставать транзакцию по хэшу
+	fmt.Println("Extracting Tx")
+	tx := mockTransaction()
+	fmt.Println("Successfuly extracted Tx")
+
+	// TODO: по-честному доставать отправителя
+	fmt.Println("Extracting Tx sender")
+	sender := mockSender(tx.From)
+	fmt.Println("Successfuly extracted Tx sender")
+
+	if !isSignatureValid(tx, sender.PubKey) {
+		fmt.Println("Tx signature is invalid")
+		return false
+	}
+	fmt.Println("Tx signature is valid")
+
+	// TODO: нужно ли валидировать получателя?
+
+	if !isAmountValid(tx.Amount, sender.Balance) {
+		fmt.Println("Tx amount is invalid")
+		return false
+	}
+	fmt.Println("Tx amount is valid")
+
+	// TODO: нужны ли ещё какие-то валидации?
 
 	return true
 }
