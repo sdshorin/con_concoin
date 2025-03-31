@@ -1,6 +1,7 @@
 package hooks
 
 import (
+	"concoin/conrun/pkg/interfaces"
 	"concoin/conrun/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -24,13 +25,13 @@ func (h *DebugHook) ShouldHandle(messageType string) bool {
 }
 
 // Validate проверяет валидность сообщения
-func (h *DebugHook) Validate(message *models.GossipMessage, msgType MessageType) bool {
+func (h *DebugHook) Validate(message *models.GossipMessage, msgType interfaces.MessageType) bool {
 	// Для дебажного хука все сообщения валидны
 	return true
 }
 
 // Handle обрабатывает сообщение
-func (h *DebugHook) Handle(message *models.GossipMessage, msgType MessageType) error {
+func (h *DebugHook) Handle(message *models.GossipMessage, msgType interfaces.MessageType) error {
 	h.logger.Infof("Debug hook received message: Type=%s, ID=%s, Origin=%s, Payload=%v",
 		message.MessageType,
 		message.MessageID,

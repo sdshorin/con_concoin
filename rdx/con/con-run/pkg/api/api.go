@@ -9,11 +9,8 @@ import (
 	"time"
 
 	"concoin/conrun/pkg/config"
-	"concoin/conrun/pkg/gossip"
-	"concoin/conrun/pkg/hooks"
+	"concoin/conrun/pkg/interfaces"
 	"concoin/conrun/pkg/models"
-	"concoin/conrun/pkg/pex"
-	"concoin/conrun/pkg/storage"
 
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -22,13 +19,13 @@ import (
 // API представляет собой HTTP API узла
 type API struct {
 	config      *config.Config
-	gossip      *gossip.GossipProtocol
-	pex         *pex.PexProtocol
+	gossip      interfaces.GossipProtocolInterface
+	pex         interfaces.PexProtocolInterface
 	logger      *logrus.Logger
 	logBuffer   []LogEntry
-	router      *mux.Router
-	storage     *storage.Storage
-	hookManager *hooks.HookManager
+	Router      *mux.Router
+	storage     interfaces.StorageInterface
+	hookManager interfaces.HookManagerInterface
 }
 
 // LogEntry представляет собой запись лога
@@ -61,14 +58,14 @@ type PeerStats struct {
 }
 
 // NewAPI создает новый экземпляр API
-func NewAPI(config *config.Config, gossip *gossip.GossipProtocol, pex *pex.PexProtocol, logger *logrus.Logger, storage *storage.Storage, hookManager *hooks.HookManager) *API {
+func NewAPI(config *config.Config, gossip interfaces.GossipProtocolInterface, pex interfaces.PexProtocolInterface, logger *logrus.Logger, storage interfaces.StorageInterface, hookManager interfaces.HookManagerInterface) *API {
 	api := &API{
 		config:      config,
 		gossip:      gossip,
 		pex:         pex,
 		logger:      logger,
 		logBuffer:   make([]LogEntry, 0, 100),
-		router:      mux.NewRouter(),
+		Router:      mux.NewRouter(),
 		storage:     storage,
 		hookManager: hookManager,
 	}
@@ -82,21 +79,21 @@ func NewAPI(config *config.Config, gossip *gossip.GossipProtocol, pex *pex.PexPr
 // setupRoutes настраивает маршруты API
 func (a *API) setupRoutes() {
 	// Gossip и PEX обработчики
-	a.router.HandleFunc("/gossip", a.handleGossipMessage).Methods("POST")
-	a.router.HandleFunc("/pex", a.handlePexMessage).Methods("POST")
+	a.Router.HandleFunc("/gossip", a.handleGossipMessage).Methods("POST")
+	a.Router.HandleFunc("/pex", a.handlePexMessage).Methods("POST")
 
 	// Проверка доступности
-	a.router.HandleFunc("/ping", a.handlePing).Methods("GET")
+	a.Router.HandleFunc("/ping", a.handlePing).Methods("GET")
 
 	// Отладочный API
-	a.router.HandleFunc("/debug", a.handleDebug).Methods("GET")
-	a.router.HandleFunc("/network", a.handleNetwork).Methods("GET")
+	a.Router.HandleFunc("/debug", a.handleDebug).Methods("GET")
+	a.Router.HandleFunc("/network", a.handleNetwork).Methods("GET")
 
 	// API для работы с сообщениями
-	a.router.HandleFunc("/messages", a.handleGetMessages).Methods("GET")
-	a.router.HandleFunc("/messages/{id}", a.handleGetMessage).Methods("GET")
-	a.router.HandleFunc("/message", a.handleMessage).Methods("POST")
-	a.router.HandleFunc("/add_message", a.handleAddMessage).Methods("POST")
+	a.Router.HandleFunc("/messages", a.handleGetMessages).Methods("GET")
+	a.Router.HandleFunc("/messages/{id}", a.handleGetMessage).Methods("GET")
+	a.Router.HandleFunc("/message", a.handleMessage).Methods("POST")
+	a.Router.HandleFunc("/add_message", a.handleAddMessage).Methods("POST")
 }
 
 // Start запускает HTTP сервер
@@ -105,7 +102,7 @@ func (a *API) Start() {
 	addr := fmt.Sprintf(":%d", a.config.Port)
 	go func() {
 		a.logger.Infof("Starting API server on %s", addr)
-		if err := http.ListenAndServe(addr, a.router); err != nil {
+		if err := http.ListenAndServe(addr, a.Router); err != nil {
 			a.logger.Fatalf("Failed to start API server: %v", err)
 		}
 	}()
@@ -193,7 +190,7 @@ func (a *API) handleMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обрабатываем сообщение через хуки
-	isValid := a.hookManager.ProcessMessage(&message, hooks.MessageTypePush)
+	isValid := a.hookManager.ProcessMessage(&message, interfaces.MessageTypePush)
 
 	if !isValid {
 		a.logger.Warnf("Message validation failed: %s", message.MessageID)
@@ -609,7 +606,7 @@ func (a *API) handleAddMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Обрабатываем сообщение через хуки
-	isValid := a.hookManager.ProcessMessage(message, hooks.MessageTypePush)
+	isValid := a.hookManager.ProcessMessage(message, interfaces.MessageTypePush)
 
 	if !isValid {
 		a.logger.Warnf("Message validation failed: %s", message.MessageID)
@@ -636,9 +633,4 @@ func (a *API) handleAddMessage(w http.ResponseWriter, r *http.Request) {
 		"status":     "success",
 		"message_id": message.MessageID,
 	})
-}
-
-// HookManager возвращает менеджер хуков
-func (a *API) HookManager() *hooks.HookManager {
-	return a.hookManager
 }

@@ -10,9 +10,8 @@ import (
 	"time"
 
 	"concoin/conrun/pkg/config"
-	"concoin/conrun/pkg/hooks"
+	"concoin/conrun/pkg/interfaces"
 	"concoin/conrun/pkg/models"
-	"concoin/conrun/pkg/storage"
 
 	"github.com/sirupsen/logrus"
 )
@@ -24,13 +23,13 @@ type GossipProtocol struct {
 	historyMutex   sync.RWMutex
 	peerList       []models.Peer
 	peerMutex      sync.RWMutex
-	hookManager    *hooks.HookManager
+	hookManager    interfaces.HookManagerInterface
 	logger         *logrus.Logger
-	storage        *storage.Storage
+	storage        interfaces.StorageInterface
 }
 
 // NewGossipProtocol создает новый экземпляр Gossip протокола
-func NewGossipProtocol(config *config.Config, logger *logrus.Logger, storage *storage.Storage, hookManager *hooks.HookManager) *GossipProtocol {
+func NewGossipProtocol(config *config.Config, logger *logrus.Logger, storage interfaces.StorageInterface, hookManager interfaces.HookManagerInterface) *GossipProtocol {
 	return &GossipProtocol{
 		config:         config,
 		messageHistory: make(map[string]time.Time),
@@ -63,28 +62,6 @@ func (g *GossipProtocol) Start() {
 	}()
 }
 
-// BroadcastMessage отправляет сообщение всем пирам
-func (g *GossipProtocol) BroadcastMessage(messageType string, payload interface{}) error {
-	// Генерируем случайный ID сообщения
-	messageID := fmt.Sprintf("%d", time.Now().UnixNano())
-
-	// Создаем сообщение Gossip
-	message := &models.GossipMessage{
-		MessageID:   messageID,
-		OriginID:    g.config.NodeID,
-		Timestamp:   time.Now().UTC(),
-		TTL:         g.config.GossipConfig.MessageTTL,
-		MessageType: messageType,
-		Payload:     payload,
-	}
-
-	// Добавляем сообщение в историю
-	g.addToMessageHistory(message.MessageID)
-
-	// Отправляем сообщение случайным пирам
-	return g.spreadMessage(message)
-}
-
 // HandleMessage обрабатывает входящее сообщение
 func (g *GossipProtocol) HandleMessage(message *models.GossipMessage) error {
 	// Проверяем TTL
@@ -105,22 +82,8 @@ func (g *GossipProtocol) HandleMessage(message *models.GossipMessage) error {
 		return nil
 	}
 
-	// Если сообщения нет в истории, проверяем его в storage
-	if !g.isMessageProcessed(message.MessageID) {
-		// Проверяем, не истек ли срок действия сообщения
-		isExpired, err := g.storage.IsMessageExpired(message.MessageID, g.config.GossipConfig.MessageMaxAge)
-		if err != nil {
-			g.logger.Warnf("Failed to check message expiration: %v", err)
-			return err
-		}
-		if isExpired {
-			g.logger.Debugf("Message expired in storage: %s", message.MessageID)
-			return nil
-		}
-	}
-
 	// Проверяем валидность сообщения через хуки
-	if !g.hookManager.ValidateMessage(message, hooks.MessageTypePull) {
+	if !g.hookManager.ValidateMessage(message, interfaces.MessageTypePull) {
 		g.logger.Warnf("Message validation failed: %s", message.MessageID)
 		return fmt.Errorf("message validation failed: %s", message.MessageID)
 	}
@@ -135,7 +98,7 @@ func (g *GossipProtocol) HandleMessage(message *models.GossipMessage) error {
 	}
 
 	// Обрабатываем сообщение через хуки
-	g.hookManager.ProcessMessage(message, hooks.MessageTypePull)
+	g.hookManager.ProcessMessage(message, interfaces.MessageTypePull)
 
 	return nil
 }

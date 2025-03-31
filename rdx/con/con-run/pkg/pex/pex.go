@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"concoin/conrun/pkg/config"
-	"concoin/conrun/pkg/hooks"
+	"concoin/conrun/pkg/interfaces"
 	"concoin/conrun/pkg/models"
-	"concoin/conrun/pkg/storage"
 
 	"github.com/sirupsen/logrus"
 )
@@ -22,15 +21,15 @@ import (
 type PexProtocol struct {
 	config      *config.Config
 	peerTable   map[string]models.Peer // nodeId -> peer
-	storage     *storage.Storage
+	storage     interfaces.StorageInterface
 	mutex       sync.RWMutex
 	logger      *logrus.Logger
-	hookManager *hooks.HookManager
+	hookManager interfaces.HookManagerInterface
 	onPeersList func(peers []models.Peer)
 }
 
 // NewPexProtocol создает новый экземпляр PEX протокола
-func NewPexProtocol(config *config.Config, storage *storage.Storage, logger *logrus.Logger, hookManager *hooks.HookManager) *PexProtocol {
+func NewPexProtocol(config *config.Config, storage interfaces.StorageInterface, logger *logrus.Logger, hookManager interfaces.HookManagerInterface) *PexProtocol {
 	return &PexProtocol{
 		config:      config,
 		peerTable:   make(map[string]models.Peer),
@@ -496,6 +495,18 @@ func (p *PexProtocol) notifyPeersUpdated() {
 func (p *PexProtocol) syncMessagesWithPeer(peer models.Peer) error {
 	p.logger.Infof("Starting message sync with peer %s", peer.NodeID)
 
+	// Получаем список локальных сообщений
+	localMessageIDs, err := p.storage.GetMessageList()
+	if err != nil {
+		return fmt.Errorf("failed to get local message list: %w", err)
+	}
+
+	// Создаем карту локальных сообщений для быстрого поиска
+	localMessages := make(map[string]bool)
+	for _, msgID := range localMessageIDs {
+		localMessages[msgID] = true
+	}
+
 	// Получаем список сообщений пира
 	url := fmt.Sprintf("http://%s/messages", peer.Address)
 	resp, err := http.Get(url)
@@ -516,7 +527,7 @@ func (p *PexProtocol) syncMessagesWithPeer(peer models.Peer) error {
 	// Загружаем отсутствующие сообщения
 	var syncMessages int
 	for _, msgID := range messageIDs {
-		if !p.storage.HasMessage(msgID) {
+		if !localMessages[msgID] {
 			if err := p.downloadMessage(peer, msgID); err != nil {
 				p.logger.Warnf("Failed to download message %s: %v", msgID, err)
 				continue
@@ -548,7 +559,7 @@ func (p *PexProtocol) downloadMessage(peer models.Peer, messageID string) error 
 	}
 
 	// Проверяем валидность сообщения через хуки
-	if !p.hookManager.ValidateMessage(&message, hooks.MessageTypeLoaded) {
+	if !p.hookManager.ValidateMessage(&message, interfaces.MessageTypeLoaded) {
 		p.logger.Warnf("Message validation failed during download: %s", messageID)
 		return fmt.Errorf("message validation failed: %s", messageID)
 	}
@@ -559,7 +570,7 @@ func (p *PexProtocol) downloadMessage(peer models.Peer, messageID string) error 
 	}
 
 	// Обрабатываем сообщение через хуки
-	p.hookManager.ProcessMessage(&message, hooks.MessageTypeLoaded)
+	p.hookManager.ProcessMessage(&message, interfaces.MessageTypeLoaded)
 
 	return nil
 }

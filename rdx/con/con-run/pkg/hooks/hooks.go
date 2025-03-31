@@ -1,33 +1,16 @@
 package hooks
 
 import (
+	"concoin/conrun/pkg/interfaces"
+
 	"concoin/conrun/pkg/models"
 
 	"github.com/sirupsen/logrus"
 )
 
-// MessageType представляет тип сообщения
-type MessageType string
-
-const (
-	MessageTypeLoaded MessageType = "loaded" // Сообщение загружено с диска
-	MessageTypePull   MessageType = "pull"   // Сообщение получено от другой ноды
-	MessageTypePush   MessageType = "push"   // Сообщение отправлено другой ноде
-)
-
-// Hook представляет собой интерфейс для обработчиков сообщений
-type Hook interface {
-	// ShouldHandle проверяет, должен ли хук обрабатывать сообщение данного типа
-	ShouldHandle(messageType string) bool
-	// Validate проверяет валидность сообщения
-	Validate(message *models.GossipMessage, msgType MessageType) bool
-	// Handle обрабатывает валидное сообщение
-	Handle(message *models.GossipMessage, msgType MessageType) error
-}
-
 // HookManager управляет всеми хуками
 type HookManager struct {
-	hooks   []Hook
+	hooks   []interfaces.Hook
 	logger  *logrus.Logger
 	rootDir string
 }
@@ -35,19 +18,19 @@ type HookManager struct {
 // NewHookManager создает новый менеджер хуков
 func NewHookManager(rootDir string, logger *logrus.Logger) *HookManager {
 	return &HookManager{
-		hooks:   make([]Hook, 0),
+		hooks:   make([]interfaces.Hook, 0),
 		logger:  logger,
 		rootDir: rootDir,
 	}
 }
 
 // AddHook добавляет новый хук
-func (hm *HookManager) AddHook(hook Hook) {
+func (hm *HookManager) AddHook(hook interfaces.Hook) {
 	hm.hooks = append(hm.hooks, hook)
 }
 
 // ValidateMessage проверяет валидность сообщения через все подходящие хуки
-func (hm *HookManager) ValidateMessage(message *models.GossipMessage, msgType MessageType) bool {
+func (hm *HookManager) ValidateMessage(message *models.GossipMessage, msgType interfaces.MessageType) bool {
 	// Проверяем, есть ли хотя бы один хук, который должен обрабатывать это сообщение
 	hasHandler := false
 	for _, hook := range hm.hooks {
@@ -75,7 +58,7 @@ func (hm *HookManager) ValidateMessage(message *models.GossipMessage, msgType Me
 }
 
 // ProcessMessage обрабатывает сообщение через все подходящие хуки
-func (hm *HookManager) ProcessMessage(message *models.GossipMessage, msgType MessageType) bool {
+func (hm *HookManager) ProcessMessage(message *models.GossipMessage, msgType interfaces.MessageType) bool {
 	// Проверяем, есть ли хотя бы один хук, который должен обрабатывать это сообщение
 	hasHandler := false
 	for _, hook := range hm.hooks {
