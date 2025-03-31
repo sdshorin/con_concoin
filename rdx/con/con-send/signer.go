@@ -1,15 +1,32 @@
-package sender
+package signer
 
 import (
+	"bytes"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/asn1"
 	"encoding/json"
 	"log"
 	"math/big"
 	"net/http"
-	"os"
+)
+
+const (
+	ServerAddress     = "http://localhost"
+	ServerDefaultPort = "8080"
+	SendHandle        = "/add_message" // implemented in con-run
+)
+
+type MaliciousBehaviourType int
+
+const (
+	Double           MaliciousBehaviourType = iota
+	InvalidSignKey                          // 1
+	InvalidTransfer                         // 1
+	InvalidSignature                        // 1
+	DifferentData                           // cannot be fully tested internally since con-valid must check signatures for each tx
+	None                                    // good ending
 )
 
 type Transaction struct {
@@ -19,20 +36,29 @@ type Transaction struct {
 	Key    *ecdsa.PrivateKey
 }
 
-type txData struct {
+type TxData struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
 	Amount int    `json:"amount"`
 }
 
-type signedTransaction struct {
-	Data      txData `json:"data"`
+type SignedTransaction struct {
+	Data      TxData `json:"data"`
 	Signature []byte `json:"signature"`
 }
 
-func SignAndSend(tx Transaction) {
+func Sign(tx Transaction, t MaliciousBehaviourType) []byte {
 
-	data := txData{
+	if t == InvalidTransfer {
+		randomBytes := make([]byte, 64)
+		_, err := rand.Read(randomBytes)
+		if err != nil {
+			log.Fatalf("Error generating random bytes: %v", err)
+		}
+		return randomBytes
+	}
+
+	data := TxData{
 		From:   tx.From,
 		To:     tx.To,
 		Amount: tx.Amount,
@@ -43,9 +69,14 @@ func SignAndSend(tx Transaction) {
 		log.Fatalf("Error marshaling transaction data: %v", err)
 	}
 
-	hash := sha256.Sum256(dataBytes)
+	if t == InvalidSignKey {
+		tx.Key = func() *ecdsa.PrivateKey {
+			privKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+			return privKey
+		}()
+	}
 
-	r, s, err := ecdsa.Sign(rand.Reader, tx.Key, hash[:])
+	r, s, err := ecdsa.Sign(rand.Reader, tx.Key, dataBytes[:])
 	if err != nil {
 		log.Fatalf("Error signing transaction: %v", err)
 	}
@@ -58,7 +89,15 @@ func SignAndSend(tx Transaction) {
 		log.Fatalf("Error encoding signature: %v", err)
 	}
 
-	signedTx := signedTransaction{
+	if t == InvalidSignature {
+		sig[0] ^= 1 // corrupt the signature
+	}
+
+	if t == DifferentData {
+		data.To = "MaliciousBob"
+	}
+
+	signedTx := SignedTransaction{
 		Data:      data,
 		Signature: sig,
 	}
@@ -68,7 +107,7 @@ func SignAndSend(tx Transaction) {
 		log.Fatalf("Error marshaling signed transaction: %v", err)
 	}
 
-	os.Stdout.Write(output)
+	return output
 }
 
 func transactionHandler(w http.ResponseWriter, r *http.Request) {
@@ -84,12 +123,50 @@ func transactionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	maliciousHeader := r.Header.Get("Malicious")
+	var maliciousType MaliciousBehaviourType
+
+	switch maliciousHeader {
+	case "Double":
+		maliciousType = Double
+	case "Key":
+		maliciousType = InvalidSignKey
+	case "Transfer":
+		maliciousType = InvalidTransfer
+	case "Signature":
+		maliciousType = InvalidSignature
+	case "DifferentData":
+		maliciousType = DifferentData
+	default:
+		maliciousType = None // No malicious behavior
+	}
+
 	if tx.Key == nil {
 		http.Error(w, "Missing private key in transaction", http.StatusBadRequest)
 		return
 	}
 
-	SignAndSend(tx)
+	signed_transaction := Sign(tx, maliciousType)
+	req, err := http.NewRequest(http.MethodPost, "http://localhost", bytes.NewBuffer(signed_transaction))
+	if err != nil {
+		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		http.Error(w, "Failed to send request", http.StatusInternalServerError)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "Failed to send transaction", resp.StatusCode)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Transaction signed and sent successfully"))
 }
