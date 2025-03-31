@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
 	"concoin/conrun/pkg/api"
@@ -107,6 +108,15 @@ func run(cmd *cobra.Command, args []string) {
 	nodeAPI.Start()
 
 	logger.Infof("Node started on port %d with seed port %d", cfg.Port, seedPort)
+
+	// Запускаем API получения транзакций
+	http.HandleFunc("/transactions", nil)
+
+	go func() {
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", cfg.Port+1), nil); err != nil {
+			logger.Fatalf("Failed to start HTTP server: %v", err)
+		}
+	}()
 
 	// Ждем бесконечно
 	select {}
