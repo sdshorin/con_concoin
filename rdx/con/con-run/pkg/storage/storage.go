@@ -7,15 +7,17 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	"concoin/conrun/pkg/models"
 )
 
+
+
 // Storage обеспечивает хранение данных узла
 type Storage struct {
-	dataDir    string
-	peersMutex sync.RWMutex
+	dataDir       string
+	peersMutex    sync.RWMutex
+	messagesMutex sync.RWMutex
 }
 
 // NewStorage создает новый экземпляр хранилища
@@ -23,6 +25,12 @@ func NewStorage(dataDir string) *Storage {
 	// Создаем директорию для сообщений
 	messagesDir := filepath.Join(dataDir, "messages")
 	if err := os.MkdirAll(messagesDir, 0755); err != nil {
+		// В MVP просто игнорируем ошибку
+	}
+
+	// Создаем директорию для пиров
+	peersDir := filepath.Join(dataDir, "peers")
+	if err := os.MkdirAll(peersDir, 0755); err != nil {
 		// В MVP просто игнорируем ошибку
 	}
 
@@ -88,6 +96,9 @@ func (s *Storage) GetPeers() ([]*models.Peer, error) {
 
 // SaveMessage сохраняет сообщение в хранилище
 func (s *Storage) SaveMessage(message *models.GossipMessage) error {
+	s.messagesMutex.Lock()
+	defer s.messagesMutex.Unlock()
+
 	messageData, err := json.MarshalIndent(message, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
@@ -108,6 +119,9 @@ func (s *Storage) SaveMessage(message *models.GossipMessage) error {
 
 // GetMessage получает сообщение по ID
 func (s *Storage) GetMessage(messageID string) (*models.GossipMessage, error) {
+	s.messagesMutex.RLock()
+	defer s.messagesMutex.RUnlock()
+
 	messagePath := filepath.Join(s.dataDir, "messages", fmt.Sprintf("%s.json", messageID))
 	messageData, err := os.ReadFile(messagePath)
 	if err != nil {
@@ -124,6 +138,9 @@ func (s *Storage) GetMessage(messageID string) (*models.GossipMessage, error) {
 
 // GetMessageList получает список всех сообщений
 func (s *Storage) GetMessageList() ([]string, error) {
+	s.messagesMutex.RLock()
+	defer s.messagesMutex.RUnlock()
+
 	messagesDir := filepath.Join(s.dataDir, "messages")
 	entries, err := os.ReadDir(messagesDir)
 	if err != nil {
@@ -148,17 +165,10 @@ func (s *Storage) GetMessageList() ([]string, error) {
 
 // HasMessage проверяет наличие сообщения
 func (s *Storage) HasMessage(messageID string) bool {
+	s.messagesMutex.RLock()
+	defer s.messagesMutex.RUnlock()
+
 	messagePath := filepath.Join(s.dataDir, "messages", fmt.Sprintf("%s.json", messageID))
 	_, err := os.Stat(messagePath)
 	return err == nil
-}
-
-// IsMessageExpired проверяет, истек ли срок действия сообщения
-func (s *Storage) IsMessageExpired(messageID string, maxAge time.Duration) (bool, error) {
-	message, err := s.GetMessage(messageID)
-	if err != nil {
-		return false, err
-	}
-
-	return time.Since(message.Timestamp) > maxAge, nil
 }

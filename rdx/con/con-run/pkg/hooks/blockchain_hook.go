@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"concoin/conrun/pkg/interfaces"
 	"concoin/conrun/pkg/models"
 
 	"github.com/sirupsen/logrus"
@@ -63,7 +64,7 @@ func (h *BlockchainHook) save_temp_message(message *models.GossipMessage, messag
 }
 
 // Validate проверяет валидность сообщения
-func (h *BlockchainHook) Validate(message *models.GossipMessage, msgType MessageType) bool {
+func (h *BlockchainHook) Validate(message *models.GossipMessage, msgType interfaces.MessageType) bool {
 	h.logger.Infof("BlockchainHook: Validate start: %s", message.MessageID)
 	// Создаем директорию для сообщений, если её нет
 	messagesDir := filepath.Join(h.rootDir, "messages_to_check")
@@ -95,7 +96,7 @@ func (h *BlockchainHook) Validate(message *models.GossipMessage, msgType Message
 }
 
 // Handle обрабатывает сообщение
-func (h *BlockchainHook) Handle(message *models.GossipMessage, msgType MessageType) error {
+func (h *BlockchainHook) Handle(message *models.GossipMessage, msgType interfaces.MessageType) error {
 	h.logger.Infof("BlockchainHook: Handle start: %s", message.MessageID)
 
 	messagesDir := filepath.Join(h.rootDir, "messages_to_check")

@@ -11,6 +11,12 @@
 - Дебаг-API для мониторинга состояния узла
 - Сетевая статистика для мониторинга всей сети
 
+## Примеры работы
+
+![Отладочная информация узла](img/node_debug.png)
+![Сетевая статистика](img/node_network.png)
+![Пример запуска](img/run_example.png)
+
 ## Требования
 
 - Go 1.21+
@@ -49,28 +55,47 @@
 ./bin/node --port=3000 --clean
 ```
 
+### Подготовка скриптов
+```
+cd scripts
+chmod +x run_nodes.sh
+chmod +x run_nodes_mac.sh
+chmod +x add_nodes_mac.sh
+chmod +x send_test_messages.py
+chmod +x send_blockchain_messages.py
+```
+
 ### Запуск тестовой сети
 
 Для Linux/Unix:
 ```
-cd scripts
-chmod +x run_nodes.sh
 ./run_nodes.sh
 ```
 
 Для MacOS:
 ```
-cd scripts
-chmod +x run_nodes_mac.sh
 ./run_nodes_mac.sh
+```
+
+### Добавление новых узлов
+
+Для MacOS:
+```
+./add_nodes_mac.sh
 ```
 
 ### Отправка сообщений в сеть
 ```
-cd scripts
-chmod +x run_nodes.sh
 ./send_test_messages.py
 ```
+или
+
+```
+./send_blockchain_messages.py
+```
+
+## Система хуков
+
 
 ## Холодный старт
 
@@ -80,7 +105,7 @@ chmod +x run_nodes.sh
 2. Инициализирует конфигурацию узла
 3. Подключается к seed-узлам (если указаны)
 4. Начинает обмен пирами через PEX протокол
-5. Синхронизирует сообщения с подключенными пирами
+5. Синхронизирует сообщения с подключенными пирами (запрашивает у пиров список сообщений и скачивает сообщения, которые у него отсутствуют)
 
 ## Хранение данных
 
@@ -115,16 +140,18 @@ chmod +x run_nodes.sh
 ```
 .
 ├── cmd/
-│   └── node/           # Точка входа приложения
+│   └── node/                  # Точка входа приложения
 ├── pkg/
-│   ├── api/           # HTTP API и веб-интерфейс
-│   ├── blockchain/    # Заглушка блокчейна
-│   ├── config/        # Конфигурация
-│   ├── gossip/        # Gossip протокол
-│   ├── models/        # Модели данных
-│   ├── pex/           # PEX протокол
-│   └── storage/       # Хранение данных
-└── scripts/           # Скрипты для запуска тестовой сети
+│   ├── api/                   # HTTP API и веб-интерфейс
+│   ├── config/                # Конфигурация
+│   ├── gossip/                # Gossip протокол
+│   ├── hooks/                 # Система хуков для обработки входящих сообщений
+│       └── blockchain_tools/  # Хуки для системы блокчейна (sh-заглушки)
+│   ├── interfaces             # Интерфайсы
+│   ├── models/                # Модели данных
+│   ├── pex/                   # PEX протокол
+│   └── storage/               # Хранение данных
+└── scripts/                   # Скрипты для запуска тестовой сети
 ```
 
 ## API
@@ -137,9 +164,9 @@ http://localhost:<port>/debug
 
 Отображает:
 - Статистику узла
-- Высоту блокчейна
 - Количество подключенных пиров
 - Логи работы узла
+- Все сообщения на узле
 
 ### Сетевая статистика
 
@@ -166,13 +193,14 @@ GET http://localhost:<port>/messages
 GET http://localhost:<port>/messages/<message_id>
 ```
 
-#### Добавление нового сообщения
+#### Добавление нового сообщения сторонним пользователем
 ```
 POST http://localhost:<port>/add_message
 Content-Type: application/json
 
 {
-    "payload": "New message"
+   "type": "user_message",
+   "payload": {"text": "New message"}
 }
 ```
 
